@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.widget.ImageView
 import android.widget.Toast
@@ -20,8 +21,7 @@ import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceManager
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import io.github.domi04151309.batterytool.R
-import io.github.domi04151309.batterytool.helpers.AppHelper
-import io.github.domi04151309.batterytool.helpers.P
+import io.github.domi04151309.batterytool.helpers.*
 import io.github.domi04151309.batterytool.helpers.Root
 import io.github.domi04151309.batterytool.helpers.Theme
 import io.github.domi04151309.batterytool.services.ForegroundService
@@ -73,7 +73,7 @@ class MainActivity : AppCompatActivity(),
     ): Boolean {
         val fragment = supportFragmentManager.fragmentFactory.instantiate(
             classLoader,
-            pref.fragment
+            pref.fragment ?: throw IllegalStateException()
         )
         fragment.arguments = pref.extras
         fragment.setTargetFragment(caller, 0)
@@ -104,7 +104,7 @@ class MainActivity : AppCompatActivity(),
             activity?.findViewById<FloatingActionButton>(R.id.hibernate)?.setOnClickListener {
                 AppHelper.hibernate(c)
                 Toast.makeText(c, R.string.toast_stopped_all, Toast.LENGTH_SHORT).show()
-                Handler().postDelayed({
+                Handler(Looper.getMainLooper()).postDelayed({
                     loadLists()
                 }, 1000)
             }
@@ -134,18 +134,30 @@ class MainActivity : AppCompatActivity(),
             val preferenceSoonArray: ArrayList<Preference> = ArrayList(appArray.length() / 2)
             val preferenceStoppedArray: ArrayList<Preference> = ArrayList(appArray.length() / 2)
             val services = Root.getServices()
+            val forcedSet = ForcedSet(prefs)
 
             var preference: Preference
             for (i in 0 until appArray.length()) {
                 preference = try {
-                    AppHelper.generatePreference(c, appArray.getString(i))
+                    AppHelper.generatePreference(c, appArray.getString(i), forcedSet)
                 } catch (e: Exception) {
                     continue
                 }
                 preference.setOnPreferenceClickListener {
+                    val options = resources
+                        .getStringArray(R.array.main_click_dialog_options)
+                        .toMutableList()
+                    val isForced = forcedSet.contains(it.summary.toString())
+                    options.add(
+                        2,
+                        resources.getString(
+                            if (isForced) R.string.main_click_dialog_turn_off_always
+                            else R.string.main_click_dialog_turn_on_always
+                        )
+                    )
                     AlertDialog.Builder(c)
                         .setTitle(R.string.main_click_dialog_title)
-                        .setItems(R.array.main_click_dialog_options) { _, which ->
+                        .setItems(options.toTypedArray()) { _, which ->
                             when (which) {
                                 0 -> {
                                     Root.shell("am force-stop ${it.summary}")
@@ -160,6 +172,18 @@ class MainActivity : AppCompatActivity(),
                                     })
                                 }
                                 2 -> {
+                                    if (isForced) forcedSet.remove(it.summary.toString())
+                                    else forcedSet.add(it.summary.toString())
+                                    forcedSet.save()
+                                    Toast.makeText(
+                                        context,
+                                        if (isForced) R.string.main_click_dialog_turn_off_always
+                                        else R.string.main_click_dialog_turn_on_always,
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                    loadLists()
+                                }
+                                3 -> {
                                     for (j in 0 until appArray.length()) {
                                         if (appArray.getString(j) == it.summary) {
                                             appArray.remove(j)
@@ -186,7 +210,11 @@ class MainActivity : AppCompatActivity(),
             var isSoonEmpty = true
             var isUnnecessaryEmpty = true
             for (item in preferenceSoonArray.sortedWith(compareBy { it.title.toString() })) {
-                if (services.contains(item.summary)) {
+                if (
+                    item.summary != null
+                    && (services.contains(item.summary ?: throw IllegalStateException())
+                            || forcedSet.contains(item.summary.toString()))
+                ) {
                     categorySoon.addPreference(item)
                     isSoonEmpty = false
                 } else {

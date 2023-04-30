@@ -17,7 +17,7 @@ import io.github.domi04151309.batterytool.helpers.Theme
 import io.github.domi04151309.batterytool.services.NotificationService
 
 
-public class SettingsActivity : AppCompatActivity(),
+class SettingsActivity : AppCompatActivity(),
     PreferenceFragmentCompat.OnPreferenceStartFragmentCallback {
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,7 +36,7 @@ public class SettingsActivity : AppCompatActivity(),
     ): Boolean {
         val fragment = supportFragmentManager.fragmentFactory.instantiate(
             classLoader,
-            pref.fragment
+            pref.fragment ?: throw IllegalStateException()
         )
         fragment.arguments = pref.extras
         fragment.setTargetFragment(caller, 0)
@@ -60,37 +60,37 @@ public class SettingsActivity : AppCompatActivity(),
 
 
         private fun checkNotificationsPermission() {
-            var needsPermission = preferenceManager.sharedPreferences.getBoolean(P.PREF_ALLOW_MUSIC, P.PREF_ALLOW_MUSIC_DEFAULT)
-            if (!needsPermission) {
-                return
-            }
-            val hasPermission = NotificationService.getInstance() != null;
+            val needsPermission = preferenceManager.sharedPreferences?.getBoolean(
+                P.PREF_ALLOW_MUSIC,
+                P.PREF_ALLOW_MUSIC_DEFAULT
+            ) ?: P.PREF_ALLOW_MUSIC_DEFAULT
+            if (!needsPermission) return
+            val hasPermission = NotificationService.getInstance() != null
             if (!hasPermission) {
-                val editor: SharedPreferences.Editor = preferenceManager.sharedPreferences.edit()
-                editor.putBoolean(P.PREF_ALLOW_MUSIC, P.PREF_ALLOW_MUSIC_DEFAULT)
-                editor.commit()
-                var checkBoxPreference = preferenceScreen.findPreference<Preference>(
+                preferenceManager.sharedPreferences?.edit()
+                    ?.putBoolean(P.PREF_ALLOW_MUSIC, P.PREF_ALLOW_MUSIC_DEFAULT)
+                    ?.apply()
+                preferenceScreen.findPreference<SwitchPreference>(
                     P.PREF_ALLOW_MUSIC
-                ) as SwitchPreference?
-                if (checkBoxPreference != null) {
-                    checkBoxPreference.setChecked(P.PREF_ALLOW_MUSIC_DEFAULT);
-                }
+                )?.isChecked = P.PREF_ALLOW_MUSIC_DEFAULT
             }
         }
+
         override fun onCreate(savedInstanceState: Bundle?) {
             super.onCreate(savedInstanceState)
             checkNotificationsPermission()
-            getNotifSettings = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-                checkNotificationsPermission()
-            }
-            preferenceManager.sharedPreferences.registerOnSharedPreferenceChangeListener(
+            getNotifSettings =
+                registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+                    checkNotificationsPermission()
+                }
+            preferenceManager.sharedPreferences?.registerOnSharedPreferenceChangeListener(
                 prefsChangedListener
             )
         }
 
         override fun onDestroy() {
             super.onDestroy()
-            preferenceManager.sharedPreferences.unregisterOnSharedPreferenceChangeListener(
+            preferenceManager.sharedPreferences?.unregisterOnSharedPreferenceChangeListener(
                 prefsChangedListener
             )
         }
@@ -109,11 +109,11 @@ public class SettingsActivity : AppCompatActivity(),
             findPreference<EditIntegerPreference>(P.PREF_AUTO_STOP_DELAY)?.summary =
                 requireContext().resources.getQuantityString(
                     R.plurals.pref_auto_stop_delay_summary,
-                    preferenceManager.sharedPreferences.getInt(
+                    preferenceManager.sharedPreferences?.getInt(
                         P.PREF_AUTO_STOP_DELAY,
                         P.PREF_AUTO_STOP_DELAY_DEFAULT
-                    ),
-                    preferenceManager.sharedPreferences.getInt(
+                    ) ?: P.PREF_AUTO_STOP_DELAY_DEFAULT,
+                    preferenceManager.sharedPreferences?.getInt(
                         P.PREF_AUTO_STOP_DELAY,
                         P.PREF_AUTO_STOP_DELAY_DEFAULT
                     )
@@ -124,11 +124,11 @@ public class SettingsActivity : AppCompatActivity(),
             findPreference<EditIntegerPreference>(P.PREF_AGGRESSIVE_DOZE_DELAY)?.summary =
                 requireContext().resources.getQuantityString(
                     R.plurals.pref_aggressive_doze_delay_summary,
-                    preferenceManager.sharedPreferences.getInt(
+                    preferenceManager.sharedPreferences?.getInt(
                         P.PREF_AGGRESSIVE_DOZE_DELAY,
                         P.PREF_AGGRESSIVE_DOZE_DELAY_DEFAULT
-                    ),
-                    preferenceManager.sharedPreferences.getInt(
+                    ) ?: P.PREF_AGGRESSIVE_DOZE_DELAY_DEFAULT,
+                    preferenceManager.sharedPreferences?.getInt(
                         P.PREF_AGGRESSIVE_DOZE_DELAY,
                         P.PREF_AGGRESSIVE_DOZE_DELAY_DEFAULT
                     )
@@ -136,20 +136,20 @@ public class SettingsActivity : AppCompatActivity(),
         }
 
         private fun updateAllowMusicApps() {
-            val enabled = preferenceManager.sharedPreferences.getBoolean(
+            val enabled = preferenceManager.sharedPreferences?.getBoolean(
                 P.PREF_ALLOW_MUSIC,
                 P.PREF_ALLOW_MUSIC_DEFAULT
-            )
+            ) ?: P.PREF_ALLOW_MUSIC_DEFAULT
             if (enabled) {
                 // we need to check if we have notifications permissions
-                val hasPermission = NotificationService.getInstance() != null;
+                val hasPermission = NotificationService.getInstance() != null
                 if (!hasPermission) {
                     AlertDialog.Builder(context)
                         .setTitle(R.string.notifications_permission)
                         .setMessage(R.string.notifications_permission_explanation)
                         .setPositiveButton(android.R.string.ok) { _, _ ->
                             try {
-                                getNotifSettings.launch(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+                                getNotifSettings.launch(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                             } catch (e: ActivityNotFoundException) {
                             }
                         }
